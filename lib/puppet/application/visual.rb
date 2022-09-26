@@ -1,0 +1,124 @@
+# frozen_string_literal: true
+
+require 'puppet/util/nc_classifier'
+require 'puppet/util/cli-tree'
+
+class Puppet::Application::Visual < Puppet::Application
+  def summary
+    "Visualize information from a PE install"
+  end
+
+  def help
+    <<~HELP
+puppet-visual(8) -- #{summary}
+========
+
+SYNOPSIS
+--------
+Visualize information from a configured Puppet Enterprise installation
+
+USAGE
+-----
+puppet visual <action> [-h|--help]
+
+
+OPTIONS
+-------
+
+* --help:
+  Print this help message.
+
+ACTIONS
+-------
+
+* node_groups:
+  Query the classification endpoint and print out a tree view of only node groups
+
+* environment_groups:
+  Query the classification endpoint and print out a tree view of only environment groups
+
+* all_groups:
+  Query the classification endpoint and print out a tree view of all groups
+    HELP
+  end
+
+  def main
+    # call action
+    send(@command_line.args.shift)
+  end
+
+  def environment_groups
+    classifier = Puppet::Util::Nc_classifier.new
+    my_json = classifier.get('/classifier-api/v1/groups')
+    print_classifier_groups(my_json,'env_gp')
+  end
+
+  def node_groups
+    classifier = Puppet::Util::Nc_classifier.new
+    my_json = classifier.get('/classifier-api/v1/groups')
+    print_classifier_groups(my_json,'n_gp')
+  end
+
+  def all_groups
+    classifier = Puppet::Util::Nc_classifier.new
+    my_json = classifier.get('/classifier-api/v1/groups')
+    print_classifier_groups(my_json)
+  end
+
+  def print_classifier_groups(json_data, filter = nil)
+    groups = {}
+    
+    # json looking for env groups
+    json_data.each do |group|
+
+      case filter
+      when 'env_gp'
+        next unless group['environment_trumps']
+      when 'n_gp'
+        next if group['environment_trumps']
+      end
+    
+      groups[group['id']] = {
+        'environment_trumps' => group['environment_trumps'],
+        'name'               => group['name'],
+        'parent'             => group['parent'],
+        'environment'        => group['environment']
+      }
+    
+    end
+    
+    # make sure we have the parent groups
+    missing = {}
+    groups.each do |_id, data|
+      next if groups.key?(data['parent'])
+    
+      missing[data['parent']] = {
+        'environment_trumps' => json_data[data['parent'].to_i]['environment_trumps'],
+        'name'               => json_data[data['parent'].to_i]['name'],
+        'parent'             => json_data[data['parent'].to_i]['parent'],
+        'environment'        => json_data[data['parent'].to_i]['environment']
+      }
+    end
+    
+    groups.merge!(missing)
+    
+    # Find the root of the tree
+    top = groups.select { |id, data| id == data['parent'] }.keys.first
+    
+    # Used to store children and id's
+    tree = Hash.new { |h, k| h[k] = { :id => nil, :name => nil, :children => [ ] } }
+    
+    # Find all the children and keep track
+    groups.each do |id, data|
+      eg = groups[id]['environment_trumps']
+      parent = data['parent'] unless id == data['parent']
+      tree[id][:id] = id
+      tree[id][:name] = eg ? "#{data['name']} (Env: #{data['environment']})" : "#{data['name']}"
+      tree[parent][:children].push(tree[id])
+    end
+    
+    # Print out
+    Puppet::Util::TreeNode.from_h(tree[top]).print
+
+  end
+end
