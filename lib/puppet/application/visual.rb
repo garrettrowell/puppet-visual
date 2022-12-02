@@ -4,6 +4,7 @@ require 'puppet/util/nc_classifier'
 require 'puppet/util/nc_codemanager'
 require 'puppet/util/nc_server'
 require 'puppet/util/cli-tree'
+require 'puppet/util/cli-table'
 
 class Puppet::Application::Visual < Puppet::Application
   def summary
@@ -85,11 +86,33 @@ ACTIONS
     puts JSON.pretty_generate(my_json)
   end
 
+  def print_modules(json_data)
+    clean_keys = json_data['modules'].map{|hash| hash.transform_keys(&:to_sym) }
+    clean_vals = clean_keys.map do |hash|
+      hash.transform_values do |value|
+        value.nil? ? 'N/A' : value
+      end
+    end
+
+    table = Puppet::Util::Clitable.new({name: 'Module Name', version: 'Version'},clean_vals)
+    table.print
+  end
+
   def environment_modules
     server = Puppet::Util::Nc_server.new(options: options)
     req_params = options.key?(:env) ? {'environment' => options[:env]} : nil
     my_json = server.get('/puppet/v3/environment_modules', req_params)
-    puts JSON.pretty_generate(my_json)
+    if my_json.is_a?(Hash)
+      # returns a hash when env specified
+      print_modules(my_json)
+    elsif my_json.is_a?(Array)
+      # returns an array when no env specified
+      my_json.each do |env_mods|
+        puts env_mods['name']
+        print_modules(env_mods)
+      end
+    end
+#    puts JSON.pretty_generate(my_json)
   end
 
   def environment_classes
