@@ -1,8 +1,8 @@
 require 'faraday'
 require 'faraday_middleware'
 
-class Puppet::Util::Nc_classifier(options:)
-  def initialize
+class Puppet::Util::Nc_classifier
+  def initialize(options:)
     classification_server = Puppet.settings['server']
     classification_port   = 4433
     classification_url   = "https://#{classification_server}:#{classification_port}"
