@@ -2,7 +2,7 @@
 
 require 'puppet/util/nc_classifier'
 require 'puppet/util/nc_codemanager'
-
+require 'puppet/util/nc_server'
 require 'puppet/util/cli-tree'
 
 class Puppet::Application::Visual < Puppet::Application
@@ -57,6 +57,10 @@ ACTIONS
     options[:auth_token] = v
   end
 
+  option("--env [ENV]") do |v|
+    options[:env] = v
+  end
+
   def environment_groups
     classifier = Puppet::Util::Nc_classifier.new(options: options)
     my_json = classifier.get('/classifier-api/v1/groups')
@@ -78,6 +82,20 @@ ACTIONS
   def deploy_status
     codemanager = Puppet::Util::Nc_codemanager.new(options: options)
     my_json = codemanager.get('/code-manager/v1/deploys/status')
+    puts JSON.pretty_generate(my_json)
+  end
+
+  def environment_modules
+    server = Puppet::Util::Nc_server.new(options: options)
+    req_params = options.key?(:env) ? {'environment' => options[:env]} : nil
+    my_json = server.get('/puppet/v3/environment_modules', req_params)
+    puts JSON.pretty_generate(my_json)
+  end
+
+  def environment_classes
+    server = Puppet::Util::Nc_server.new(options: options)
+    req_params = options.key?(:env) ? {'environment' => options[:env]} : nil
+    my_json = server.get('/puppet/v3/environment_classes', req_params)
     puts JSON.pretty_generate(my_json)
   end
 
